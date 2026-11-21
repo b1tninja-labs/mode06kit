@@ -1,5 +1,0 @@
-# A two-row excerpt used to pin the cell splitter on real GM layouts.
-# From GM CAN mode $06 data, Oxygen Sensor Monitor Bank 1 Sensor 1.
-                   Oxygen Sensor Monitor Bank 1 Sensor 1
-01        04       0A                           Lean to Rich Sensor Switch Time                    0 to 65535 ms           1 ms / bit
-01        84 (16)  04                                                                        -65536 to +65534 mV/s        2 mV/s / bit

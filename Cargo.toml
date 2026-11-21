@@ -1,0 +1,19 @@
+[package]
+name = "mode06kit"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Parse GM's published Mode $06 (SAE J1979 / ISO 15031-5) OBD documents into a typed OBDMID/TID model"
+license = "Apache-2.0"
+readme = "README.md"
+keywords = ["mode06", "obd", "obdmid", "j1979", "diagnostics"]
+categories = ["parser-implementations"]
+publish = false # name verified FREE (projecthub shells names --crates mode06kit); stays until first publish
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }

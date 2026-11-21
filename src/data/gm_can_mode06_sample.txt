@@ -5,7 +5,7 @@
 # section `mon-oxygen-sensor-monitor-bank-1-sensor-1` (lines 14-62).
 # Cite: GM Mode $06 data definitions (CAN) section
 #        "Oxygen Sensor Monitor Bank 1 Sensor 1" (local copy of GM CAN mode $06 data final_dm.pdf).
-# This is a representative single-monitor excerpt bundled so the CLI parses out of the box;
+# This is a representative single-monitor excerpt embedded so the CLI parses out of the box;
 # point `--source` at a full local extraction to parse the whole document.
 # Lines beginning with '#' are provenance only and are ignored by the parser.
                    Oxygen Sensor Monitor Bank 1 Sensor 1
