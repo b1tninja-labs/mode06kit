@@ -1,0 +1,72 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mode06kit"
+dynamic = ["version"]
+description = "Parse GM's own published Mode $06 (On-Board Monitoring Test Results, SAE J1979 / ISO 15031-5) documents into a typed model of OBD Monitor IDs, Test IDs, unit-and-scaling IDs and value ranges. It reads GM's text; it opens no bus and writes nothing to a vehicle."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.12"
+authors = [{ name = "Justin Capella" }]
+keywords = ["mode06", "obd", "obdmid", "j1979", "iso15031", "diagnostics"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "mypy"]
+
+[project.scripts]
+mode06kit = "mode06kit.cli:main"
+
+[tool.hatch.version]
+path = "mode06kit/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mode06kit"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/mode06kit/", "/tests/", "/docs/", "/README.md", "/ROADMAP.md", "/PLAN.md", "/LICENSE"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "N", "UP", "SIM", "C4", "PT", "RUF", "S", "RET", "ARG"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
