@@ -87,6 +87,31 @@ fn review_lists_reconstructed_rows_from_a_source() {
 }
 
 #[test]
+fn footnotes_lists_marker_bodies_from_a_source() {
+    let mut path = std::env::temp_dir();
+    path.push(format!("mode06kit_fn_{}.txt", std::process::id()));
+    let mut file = std::fs::File::create(&path).expect("create temp");
+    file.write_all(
+        b"   FOOTNOTES\n    6 For the following 2006 model year vehicles:\n       OBDMID $31 TID $A9 test limits and test value should be multiplied by 4\n",
+    )
+    .expect("write temp");
+    let source = path.to_string_lossy().to_string();
+    let (code, out) = run(&args(&["footnotes", "--source", &source]));
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(code, 0);
+    assert!(out.contains("(6)"));
+    assert!(out.contains("multiplied by 4"));
+    assert!(out.contains("1 footnotes"));
+}
+
+#[test]
+fn footnotes_on_the_bundled_sample_reports_none() {
+    let (code, out) = run(&args(&["footnotes"]));
+    assert_eq!(code, 0);
+    assert!(out.contains("no footnotes"));
+}
+
+#[test]
 fn an_unknown_command_is_an_error() {
     let (code, _) = run(&args(&["frobnicate"]));
     assert_eq!(code, 2);

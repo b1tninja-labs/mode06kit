@@ -10,7 +10,7 @@ use std::fs;
 use crate::catalog;
 use crate::groups;
 use crate::model::Mode06Record;
-use crate::parser::{group_by_obdmid, lookup, parse_all, reconstructed};
+use crate::parser::{group_by_obdmid, lookup, parse_all, parse_footnotes, reconstructed};
 
 /// The usage text, shown on a missing or unknown command.
 fn usage() -> String {
@@ -20,6 +20,7 @@ fn usage() -> String {
         "  lookup   OBDMID [TID] [--source FILE]   look up records by OBDMID (and optional TID), hex",
         "  monitors [--source FILE]        list the monitor headings found and their row counts",
         "  review   [--source FILE]        list the low-confidence (reconstructed) rows and their raw lines",
+        "  footnotes [--source FILE]       the FOOTNOTES section bodies (marker 1..20)",
         "  groups                          the OBD-group document mapping and the Volt selection",
     ]
     .join("\n")
@@ -40,15 +41,19 @@ fn take_source(args: &[String]) -> (Option<String>, Vec<String>) {
     (source, positionals)
 }
 
+/// Read the source text: the named file, or the bundled sample when `source` is [`None`].
+fn load_text(source: Option<&str>) -> Result<String, String> {
+    match source {
+        None => Ok(catalog::SAMPLE_TEXT.to_string()),
+        Some(path) => fs::read_to_string(path).map_err(|err| format!("cannot read {path}: {err}")),
+    }
+}
+
 /// Load records from the named source, or the bundled sample when `source` is [`None`].
 fn load(source: Option<&str>) -> Result<Vec<Mode06Record>, String> {
     match source {
         None => Ok(catalog::sample_records()),
-        Some(path) => {
-            let text =
-                fs::read_to_string(path).map_err(|err| format!("cannot read {path}: {err}"))?;
-            Ok(parse_all(&text))
-        }
+        Some(_) => Ok(parse_all(&load_text(source)?)),
     }
 }
 
@@ -185,6 +190,30 @@ fn cmd_review(args: &[String]) -> (i32, String) {
     }
 }
 
+fn cmd_footnotes(args: &[String]) -> (i32, String) {
+    let (source, _) = take_source(args);
+    match load_text(source.as_deref()) {
+        Err(message) => (1, message),
+        Ok(text) => {
+            let footnotes = parse_footnotes(&text);
+            if footnotes.is_empty() {
+                return (
+                    0,
+                    "no footnotes in this source (point --source at a full extraction)".to_string(),
+                );
+            }
+            let mut lines: Vec<String> = Vec::new();
+            for footnote in &footnotes {
+                let body = footnote.body.replace('\n', "\n      ");
+                lines.push(format!("({}) {body}", footnote.marker));
+            }
+            lines.push("--".to_string());
+            lines.push(format!("{} footnotes", footnotes.len()));
+            (0, lines.join("\n"))
+        }
+    }
+}
+
 fn cmd_groups() -> String {
     let mut lines: Vec<String> = Vec::new();
     for doc in groups::documents() {
@@ -218,6 +247,7 @@ pub fn run(args: &[String]) -> (i32, String) {
             "lookup" => cmd_lookup(rest),
             "monitors" => cmd_monitors(rest),
             "review" => cmd_review(rest),
+            "footnotes" => cmd_footnotes(rest),
             "groups" => (0, cmd_groups()),
             other => (2, format!("unknown command: {other}\n{}", usage())),
         },

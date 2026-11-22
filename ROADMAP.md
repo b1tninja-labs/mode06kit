@@ -45,6 +45,16 @@ in `primarysource`, so the UASID is kept as a raw byte rather than expanded to a
 | `[ok]` | a row with no description on its ID line or any continuation is marked `Missing`, not guessed | GM CAN mode $06 data | `tests/parser.rs::a_row_with_no_description_anywhere_is_marked_missing` |
 | `[ok]` | `parser::reconstructed` lists the low-confidence (reconstructed) rows for review | docs/extraction-limits.md | `tests/parser.rs::reconstructed_lists_only_the_low_confidence_rows` |
 
+## The FOOTNOTES section
+
+| Status | Obligation | Anchor | Test |
+|---|---|---|---|
+| `[ok]` | `parser::parse_footnotes` extracts every footnote marker 1..20 and its body, in order | `gm:mode6-can§footnotes` | `tests/footnotes.rs::every_footnote_marker_is_parsed_in_order` |
+| `[ok]` | a footnote body keeps its model-year / vehicle / OBDMID-TID applicability text | `gm:mode6-can§footnotes` | `tests/footnotes.rs::a_footnote_body_keeps_its_applicability_text` |
+| `[ok]` | a footnote body wrapped across lines is joined | `gm:mode6-can§footnotes` | `tests/footnotes.rs::a_wrapped_footnote_body_joins_its_lines` |
+| `[ok]` | page-break furniture and `GMLAN rev<n>` margin tags are stripped from bodies | `gm:mode6-can§footnotes` | `tests/footnotes.rs::page_furniture_and_gmlan_tags_are_stripped_from_bodies` |
+| `[ok]` | `parser::footnote_body` resolves a marker to its text, or `None` | `gm:mode6-can§footnotes` | `tests/footnotes.rs::a_missing_marker_has_no_body` |
+
 ## OBD groups and the embedded sample
 
 | Status | Obligation | Anchor | Test |
@@ -66,7 +76,6 @@ in `primarysource`, so the UASID is kept as a raw byte rather than expanded to a
 | Status | Obligation | Anchor | Test |
 |---|---|---|---|
 | `[open]` | Stitch a description fragment stranded on a neighbouring row's ID line (cross-row): the flattened text offsets the ID and description columns, so this cannot be resolved without the source PDF. Blocked on a page/PDF back-reference from `primarysource` (see `docs/extraction-limits.md`). | GM CAN mode $06 data lines 36-38 | none |
-| `[open]` | Parse the FOOTNOTES section bodies (model-year / vehicle applicability per marker 1..20) | `gm:mode6-can§footnotes` | none |
 | `[open]` | Parse the legacy `GM Class2 mode $06 data` document (different layout) | GM Class2 mode $06 data | none |
 | `[open]` | Expand each UASID to its ISO 15031-5 unit-and-scaling definition | ISO 15031-5 (not loaded in primarysource) | none |
 

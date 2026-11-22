@@ -11,7 +11,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::model::{DescriptionSource, Mode06Record, parse_range, parse_scaling};
+use crate::model::{DescriptionSource, Footnote, Mode06Record, parse_range, parse_scaling};
 
 /// A parsed data row before it is wrapped in a [`Mode06Record`].
 struct RawRow {
@@ -359,6 +359,89 @@ pub fn lookup(records: &[Mode06Record], obdmid: u8, tid: Option<u8>) -> Vec<&Mod
         .iter()
         .filter(|record| record.obdmid == obdmid && tid.is_none_or(|wanted| record.tid == wanted))
         .collect()
+}
+
+/// Collapse internal whitespace runs to single spaces and trim the ends.
+fn collapse_ws(line: &str) -> String {
+    line.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Strip a trailing `GMLAN rev<n>` page-margin tag from a line, then trim.
+fn strip_trailing_gmlan(line: &str) -> &str {
+    if let Some(index) = line.rfind("GMLAN rev") {
+        let tail = &line[index + "GMLAN rev".len()..];
+        if !tail.is_empty() && tail.bytes().all(|byte| byte.is_ascii_digit()) {
+            return line[..index].trim_end();
+        }
+    }
+    line
+}
+
+/// Collapse a footnote line's whitespace and drop its trailing `GMLAN rev<n>` margin tag.
+fn clean_footnote_line(line: &str) -> String {
+    strip_trailing_gmlan(&collapse_ws(line)).to_string()
+}
+
+/// If `line` begins a footnote (`<1..=20> For the following ...`), return `(marker, rest of line)`.
+fn footnote_start(line: &str) -> Option<(u32, &str)> {
+    let (token, rest) = next_token(line)?;
+    let marker: u32 = token.parse().ok()?;
+    if !(1..=20).contains(&marker) {
+        return None;
+    }
+    let rest = rest.trim_start();
+    if rest.starts_with("For the following") {
+        Some((marker, rest))
+    } else {
+        None
+    }
+}
+
+/// Parse the FOOTNOTES section of a GM Mode $06 document into [`Footnote`] entries, in order.
+///
+/// A footnote begins at a `<marker> For the following ...` line and runs until the next such line.
+/// The page-break furniture GM reprints between footnotes is dropped and the `GMLAN rev<n>` margin
+/// tags are stripped; the body is kept as cleaned text, not parsed into structured rules. Text with
+/// no FOOTNOTES section (such as a single-monitor excerpt) yields an empty list.
+#[must_use]
+pub fn parse_footnotes(text: &str) -> Vec<Footnote> {
+    let mut footnotes: Vec<Footnote> = Vec::new();
+    let mut current: Option<(u32, Vec<String>)> = None;
+    for line in text.lines() {
+        if let Some((marker, rest)) = footnote_start(line) {
+            if let Some((prev_marker, body)) = current.take() {
+                footnotes.push(Footnote {
+                    marker: prev_marker,
+                    body: body.join("\n"),
+                });
+            }
+            current = Some((marker, vec![clean_footnote_line(rest)]));
+        } else if let Some((_, body)) = current.as_mut() {
+            if is_boilerplate(line) || line.trim().is_empty() {
+                continue;
+            }
+            let cleaned = clean_footnote_line(line);
+            if !cleaned.is_empty() {
+                body.push(cleaned);
+            }
+        }
+    }
+    if let Some((marker, body)) = current.take() {
+        footnotes.push(Footnote {
+            marker,
+            body: body.join("\n"),
+        });
+    }
+    footnotes
+}
+
+/// The body text of the footnote with `marker`, or [`None`] if the text has no such footnote.
+#[must_use]
+pub fn footnote_body(footnotes: &[Footnote], marker: u32) -> Option<&str> {
+    footnotes
+        .iter()
+        .find(|footnote| footnote.marker == marker)
+        .map(|footnote| footnote.body.as_str())
 }
 
 /// Return the records whose description was reconstructed from a continuation line.

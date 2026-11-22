@@ -119,6 +119,19 @@ impl Mode06Record {
     }
 }
 
+/// One entry from the document's FOOTNOTES section: a marker and its applicability text.
+///
+/// Footnotes are model-year / vehicle caveats referenced from a row's TID (see
+/// [`Mode06Record::footnote`]). The body is the text GM printed for the marker with the page-break
+/// furniture removed; it is kept as text, not parsed into structured vehicle or OBDMID/TID rules.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Footnote {
+    /// The footnote marker, `1`..=`20`, matching [`Mode06Record::footnote`].
+    pub marker: u32,
+    /// The applicability text GM printed, furniture removed and lines joined by `\n`.
+    pub body: String,
+}
+
 /// Parse a GM numeric token, treating the en dash GM uses for minus as a minus sign.
 fn to_f64(token: &str) -> Option<f64> {
     token.trim().replace(EN_DASH, "-").parse::<f64>().ok()

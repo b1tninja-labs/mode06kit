@@ -21,6 +21,7 @@ cargo run -- records              # list the parsed records from the embedded GM
 cargo run -- lookup 01            # every TID under OBDMID $01
 cargo run -- lookup 01 04         # OBDMID $01, TID $04
 cargo run -- monitors             # the monitor headings found and their row counts
+cargo run -- footnotes --source extracted.txt   # the FOOTNOTES section bodies (marker 1..20)
 cargo run -- groups               # the OBD-group document mapping and the Volt (Group 1A) selection
 cargo run -- records --source extracted.txt   # parse a full local text extraction instead of the sample
 ```

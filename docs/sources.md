@@ -15,8 +15,9 @@ produced against a live vehicle; the crate opens no bus and writes nothing.
     **units and range**, **resolution**.
   - The **FOOTNOTES** section (markers 1..20) records model-year / vehicle-specific caveats (e.g.
     marker 6: *"OBDMID $31 TID $A9 test limits and test value should be multiplied by 4"*; marker
-    16: *"All 2017 model year and beyond"*). `parser.rs` captures the marker number; parsing the
-    footnote bodies is a `ROADMAP.md` open item.
+    16: *"All 2017 model year and beyond"*). `parser.rs` captures the marker number on each row, and
+    `parser::parse_footnotes` parses the FOOTNOTES section bodies (marker 1..20) into
+    `model::Footnote { marker, body }`; `parser::footnote_body` resolves a marker to its text.
   - Cite: `gm_cite(mode6-can, mon-oxygen-sensor-monitor-bank-1-sensor-1)` →
     *"GM Mode $06 data definitions (CAN) §mon-oxygen-sensor-monitor-bank-1-sensor-1; local copy of
     GM CAN mode $06 data final_dm.pdf; Heading: Oxygen Sensor Monitor Bank 1 Sensor 1"*.
