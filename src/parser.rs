@@ -177,6 +177,88 @@ pub fn parse_section(text: &str) -> Vec<Mode06Record> {
     records
 }
 
+/// One monitor section of the document: the monitor heading and the records that fall under it.
+///
+/// `monitor` is [`None`] only for records that appear before the document's first heading (for
+/// example a `--source` extraction that starts in the middle of a section).
+#[derive(Debug, Clone)]
+pub struct MonitorSection {
+    /// The monitor name taken from the section heading, or [`None`] before the first heading.
+    pub monitor: Option<String>,
+    /// The records parsed under this heading, in document order.
+    pub records: Vec<Mode06Record>,
+}
+
+/// Read a monitor heading out of a line already known not to be a data row or boilerplate.
+///
+/// The heading's first cell (the text before the first column gap) names the monitor and contains
+/// the whole word `Monitor` without beginning with it. That distinguishes a real heading
+/// (`Oxygen Sensor Monitor Bank 1 Sensor 3`, `EGR Monitor Bank 1`, `Catalyst Monitor Bank 1`) from
+/// the page-break column header, whose first cell is the bare word `Monitor` (as in
+/// `Monitor   Scaling ...`). Only the first cell is kept, so a heading that trails a legend
+/// (`Catalyst Monitor Bank 1   EWMA = Exponentially Weighted`) yields just the monitor name.
+fn monitor_heading(line: &str) -> Option<String> {
+    let first_cell = line.trim().split("  ").next()?.trim();
+    let mut words = first_cell.split_whitespace();
+    let first = words.next()?;
+    if first == "Monitor" {
+        return None;
+    }
+    if words.any(|word| word == "Monitor") {
+        Some(first_cell.to_string())
+    } else {
+        None
+    }
+}
+
+/// Parse a whole GM Mode $06 document into its monitor sections, in document order.
+///
+/// Unlike [`parse_section`], which names a single pre-sliced section, this walks the entire file:
+/// each monitor heading starts a new section and every data row is tagged with the heading it falls
+/// under. Page-break furniture and wrapped continuation lines carry the current monitor rather than
+/// starting a section, so a heading split across a page boundary does not fragment the file.
+#[must_use]
+pub fn parse_document(text: &str) -> Vec<MonitorSection> {
+    let mut sections: Vec<MonitorSection> = Vec::new();
+    let mut monitor: Option<String> = None;
+    let mut records: Vec<Mode06Record> = Vec::new();
+    let mut started = false;
+    for (index, line) in text.lines().enumerate() {
+        if line.trim().is_empty() || is_boilerplate(line) {
+            continue;
+        }
+        if let Some(row) = parse_row(line) {
+            records.push(record(&row, monitor.as_deref(), index + 1));
+            started = true;
+        } else if let Some(name) = monitor_heading(line) {
+            if started {
+                sections.push(MonitorSection {
+                    monitor: monitor.take(),
+                    records: std::mem::take(&mut records),
+                });
+            }
+            monitor = Some(name);
+            started = true;
+        }
+    }
+    if started {
+        sections.push(MonitorSection { monitor, records });
+    }
+    sections
+}
+
+/// Parse a whole document and return every record, each tagged with its monitor, in document order.
+///
+/// The flattened form of [`parse_document`], for callers that want the records without the section
+/// grouping.
+#[must_use]
+pub fn parse_all(text: &str) -> Vec<Mode06Record> {
+    parse_document(text)
+        .into_iter()
+        .flat_map(|section| section.records)
+        .collect()
+}
+
 /// Group records by OBDMID, preserving the order they were parsed in within each group.
 #[must_use]
 pub fn group_by_obdmid(records: &[Mode06Record]) -> BTreeMap<u8, Vec<&Mode06Record>> {

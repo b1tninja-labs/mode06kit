@@ -22,6 +22,9 @@ in `primarysource`, so the UASID is kept as a raw byte rather than expanded to a
 | `[ok]` | `parser::parse_records` does not misread a description beginning with hex letters as a row | GM CAN mode $06 data layout | `tests/parser.rs::description_starting_with_hex_letters_is_not_misread_as_a_row` |
 | `[ok]` | `parser::parse_records` skips page furniture and provenance comments | GM CAN mode $06 data layout | `tests/parser.rs::boilerplate_and_comments_are_skipped` |
 | `[ok]` | `parser::parse_section` names the monitor from the section heading | `gm:mode6-can` section headings | `tests/parser.rs::parse_section_names_the_monitor_from_the_heading` |
+| `[ok]` | `parser::parse_document` splits the whole file into monitor sections, tagging every row | `gm:mode6-can` monitor headings | `tests/parser.rs::parse_document_splits_the_document_into_monitor_sections` |
+| `[ok]` | `parser::parse_document` carries the monitor across page-break furniture instead of starting a section | GM CAN mode $06 data page breaks | `tests/parser.rs::a_page_break_header_does_not_start_a_new_section` |
+| `[ok]` | `parser::parse_document` keeps only the monitor name when a heading line trails a legend | `gm:mode6-can` heading lines | `tests/parser.rs::a_heading_that_trails_a_legend_keeps_only_the_monitor_name` |
 | `[ok]` | `parser::group_by_obdmid` groups records by OBD Monitor ID | GM CAN mode $06 data | `tests/parser.rs::the_sample_is_all_obdmid_01` |
 | `[ok]` | `parser::lookup` filters records by OBDMID and optional TID | GM CAN mode $06 data | `tests/parser.rs::lookup_filters_by_obdmid_and_tid` |
 | `[ok]` | the cell splitter keeps a slash-unit resolution apart from the range | GM CAN mode $06 data | `tests/parser.rs::a_slash_unit_resolution_is_split_from_the_range` |
@@ -57,7 +60,6 @@ in `primarysource`, so the UASID is kept as a raw byte rather than expanded to a
 
 | Status | Obligation | Anchor | Test |
 |---|---|---|---|
-| `[open]` | Whole-document monitor segmentation: split the full CAN file into every monitor section at once | GM CAN mode $06 data | none |
 | `[open]` | Reconstruct wrapped multi-line descriptions and the second definition stacked in a row | GM CAN mode $06 data | none |
 | `[open]` | Parse the FOOTNOTES section bodies (model-year / vehicle applicability per marker 1..20) | `gm:mode6-can§footnotes` | none |
 | `[open]` | Parse the legacy `GM Class2 mode $06 data` document (different layout) | GM Class2 mode $06 data | none |

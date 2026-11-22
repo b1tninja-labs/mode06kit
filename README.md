@@ -41,7 +41,10 @@ println!("{} {} {} {:?} {:?}", record.obdmid_hex(), record.tid_hex(), record.des
 
 The embedded sample is one representative monitor section of the CAN document, carried with a
 provenance header (`src/data/`), so the tools work out of the box; point `--source` at a full
-extraction for the whole file. The reliable core is the three leading identifiers plus the footnote
+extraction for the whole file, which `parser::parse_document` splits into its monitor sections
+(`Oxygen Sensor Monitor Bank 1 Sensor 3`, `EGR Monitor Bank 1`, `Catalyst Monitor Bank 1`, …),
+tagging each record with the monitor it falls under. The reliable core is the three leading
+identifiers plus the footnote
 marker; GM's heavily wrapped descriptions and the ISO 15031-5 UASID → unit expansion are tracked as
 not-built rows in [`ROADMAP.md`](ROADMAP.md). Sources and the ISO status are in
 [`docs/sources.md`](docs/sources.md) and [`docs/iso-map.md`](docs/iso-map.md).

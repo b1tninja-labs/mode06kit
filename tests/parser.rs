@@ -1,7 +1,30 @@
 //! The parser: leading-ID extraction, footnote markers, cell splitting, grouping and lookup.
 
 use mode06kit::catalog::sample_records;
-use mode06kit::parser::{group_by_obdmid, lookup, parse_records, parse_section};
+use mode06kit::parser::{
+    group_by_obdmid, lookup, parse_all, parse_document, parse_records, parse_section,
+};
+
+/// A multi-monitor excerpt of GM's CAN Mode $06 document: two Oxygen Sensor sections, a page break
+/// (its boilerplate and column-header furniture), and the `Catalyst Monitor Bank 1` heading whose
+/// line trails a legend. Every line is real GM text read through the `gm_*` tools.
+const MULTI_MONITOR: &str = "\
+                   Oxygen Sensor Monitor Bank 1 Sensor 1
+
+01        03       0A                           Rich to Lean Sensor Switch Time                    0 to 65535 ms           1 ms / bit
+01        04       0A                           Lean to Rich Sensor Switch Time                    0 to 65535 ms           1 ms / bit
+                      Oxygen Sensor Monitor Bank 1 Sensor 3
+
+03         80        16         Particulate Matter Sensor Temperature Not Plausible                  -40 to 6513.5 C     0.1 C / bit
+03         81        24         Particulate Matter Sensor Temperature Performance                  0 to 655.35 uAmps       0.01 uAmps / bit
+Footnotes are explained on the last pages of this document.
+[page 14]
+           GM mode $06 data definitions for GM vehicles using GMLAN diagnostic data link
+            OBD     Test     Units and                                Description                                Range                  Resolution
+ Monitor             Scaling                                                                   For Information ONLY.          For Information
+                   Catalyst Monitor Bank 1                                                                    EWMA = Exponentially Weighted
+21         84 (8)   05                       Catalyst Test Bank 1 ( normalized ) - EWMA                        0 to 1.999              0.0000305 / bit
+";
 
 #[test]
 fn a_clean_row_yields_the_three_leading_ids() {
@@ -94,4 +117,70 @@ fn lookup_filters_by_obdmid_and_tid() {
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].description, "Lean to Rich Sensor Switch Time");
     assert_eq!(lookup(&records, 0x05, None).len(), 0);
+}
+
+#[test]
+fn parse_document_splits_the_document_into_monitor_sections() {
+    let sections = parse_document(MULTI_MONITOR);
+    let names: Vec<Option<&str>> = sections.iter().map(|s| s.monitor.as_deref()).collect();
+    assert_eq!(
+        names,
+        vec![
+            Some("Oxygen Sensor Monitor Bank 1 Sensor 1"),
+            Some("Oxygen Sensor Monitor Bank 1 Sensor 3"),
+            Some("Catalyst Monitor Bank 1"),
+        ]
+    );
+    let counts: Vec<usize> = sections.iter().map(|s| s.records.len()).collect();
+    assert_eq!(counts, vec![2, 2, 1]);
+}
+
+#[test]
+fn a_heading_that_trails_a_legend_keeps_only_the_monitor_name() {
+    // GM's "Catalyst Monitor Bank 1" heading shares its line with an "EWMA = ..." legend; only the
+    // monitor name (the first column cell) is kept.
+    let section = parse_document(MULTI_MONITOR)
+        .into_iter()
+        .find(|s| s.records.iter().any(|r| r.obdmid == 0x21))
+        .expect("the catalyst section parses");
+    assert_eq!(section.monitor.as_deref(), Some("Catalyst Monitor Bank 1"));
+}
+
+#[test]
+fn a_page_break_header_does_not_start_a_new_section() {
+    // The column-header furniture ("Monitor  Scaling ...") sits inside the Bank 1 Sensor 3 section;
+    // the row after it stays tagged with that monitor rather than a spurious "Monitor" section.
+    let sections = parse_document(MULTI_MONITOR);
+    assert!(
+        sections
+            .iter()
+            .all(|s| s.monitor.as_deref() != Some("Monitor")),
+        "the bare-word 'Monitor' page header must not become a section"
+    );
+}
+
+#[test]
+fn parse_all_tags_each_row_with_its_own_monitor() {
+    let records = parse_all(MULTI_MONITOR);
+    let catalyst = records
+        .iter()
+        .find(|r| r.obdmid == 0x21)
+        .expect("the catalyst row parses");
+    assert_eq!(catalyst.monitor.as_deref(), Some("Catalyst Monitor Bank 1"));
+    let oxygen = records
+        .iter()
+        .find(|r| r.obdmid == 0x03)
+        .expect("the bank 1 sensor 3 row parses");
+    assert_eq!(
+        oxygen.monitor.as_deref(),
+        Some("Oxygen Sensor Monitor Bank 1 Sensor 3")
+    );
+}
+
+#[test]
+fn records_before_the_first_heading_are_a_monitorless_section() {
+    let sections = parse_document("02   07   24   Foo Test   0 to 9 counts   1 count / bit");
+    assert_eq!(sections.len(), 1);
+    assert_eq!(sections[0].monitor, None);
+    assert_eq!(sections[0].records.len(), 1);
 }

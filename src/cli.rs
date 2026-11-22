@@ -10,7 +10,7 @@ use std::fs;
 use crate::catalog;
 use crate::groups;
 use crate::model::Mode06Record;
-use crate::parser::{group_by_obdmid, lookup, parse_section};
+use crate::parser::{group_by_obdmid, lookup, parse_all};
 
 /// The usage text, shown on a missing or unknown command.
 fn usage() -> String {
@@ -46,7 +46,7 @@ fn load(source: Option<&str>) -> Result<Vec<Mode06Record>, String> {
         Some(path) => {
             let text =
                 fs::read_to_string(path).map_err(|err| format!("cannot read {path}: {err}"))?;
-            Ok(parse_section(&text))
+            Ok(parse_all(&text))
         }
     }
 }
