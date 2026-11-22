@@ -67,6 +67,26 @@ fn source_reads_a_local_file() {
 }
 
 #[test]
+fn review_lists_reconstructed_rows_from_a_source() {
+    let mut path = std::env::temp_dir();
+    path.push(format!("mode06kit_review_{}.txt", std::process::id()));
+    let mut file = std::fs::File::create(&path).expect("create temp");
+    // A bare ID line whose definition wrapped onto the next line -> a reconstructed (low-confidence)
+    // description that `review` should surface.
+    file.write_all(
+        b"My Monitor\n02   07   0A\n          Rich to Lean Sensor Switch Time   0 to 65535 ms   1 ms / bit\n",
+    )
+    .expect("write temp");
+    let source = path.to_string_lossy().to_string();
+    let (code, out) = run(&args(&["review", "--source", &source]));
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(code, 0);
+    assert!(out.contains("Rich to Lean Sensor Switch Time"));
+    assert!(out.contains("~reconstructed"));
+    assert!(out.contains("1 of 1 rows"));
+}
+
+#[test]
 fn an_unknown_command_is_an_error() {
     let (code, _) = run(&args(&["frobnicate"]));
     assert_eq!(code, 2);

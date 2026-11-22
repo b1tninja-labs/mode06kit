@@ -10,7 +10,7 @@ use std::fs;
 use crate::catalog;
 use crate::groups;
 use crate::model::Mode06Record;
-use crate::parser::{group_by_obdmid, lookup, parse_all};
+use crate::parser::{group_by_obdmid, lookup, parse_all, reconstructed};
 
 /// The usage text, shown on a missing or unknown command.
 fn usage() -> String {
@@ -19,6 +19,7 @@ fn usage() -> String {
         "  records  [--source FILE]        list every parsed Mode $06 record",
         "  lookup   OBDMID [TID] [--source FILE]   look up records by OBDMID (and optional TID), hex",
         "  monitors [--source FILE]        list the monitor headings found and their row counts",
+        "  review   [--source FILE]        list the low-confidence (reconstructed) rows and their raw lines",
         "  groups                          the OBD-group document mapping and the Volt selection",
     ]
     .join("\n")
@@ -67,6 +68,9 @@ fn format_record(record: &Mode06Record) -> String {
             line.push_str("  ");
             line.push_str(extra);
         }
+    }
+    if record.is_reconstructed() {
+        line.push_str("  ~reconstructed");
     }
     line
 }
@@ -157,6 +161,30 @@ fn cmd_monitors(args: &[String]) -> (i32, String) {
     }
 }
 
+fn cmd_review(args: &[String]) -> (i32, String) {
+    let (source, _) = take_source(args);
+    match load(source.as_deref()) {
+        Err(message) => (1, message),
+        Ok(records) => {
+            let low = reconstructed(&records);
+            let mut lines: Vec<String> = Vec::new();
+            for record in &low {
+                lines.push(format_record(record));
+                for cont in &record.continuations {
+                    lines.push(format!("      | {cont}"));
+                }
+            }
+            lines.push("--".to_string());
+            lines.push(format!(
+                "{} of {} rows had a reconstructed (low-confidence) description",
+                low.len(),
+                records.len()
+            ));
+            (0, lines.join("\n"))
+        }
+    }
+}
+
 fn cmd_groups() -> String {
     let mut lines: Vec<String> = Vec::new();
     for doc in groups::documents() {
@@ -189,6 +217,7 @@ pub fn run(args: &[String]) -> (i32, String) {
             "records" => cmd_records(rest),
             "lookup" => cmd_lookup(rest),
             "monitors" => cmd_monitors(rest),
+            "review" => cmd_review(rest),
             "groups" => (0, cmd_groups()),
             other => (2, format!("unknown command: {other}\n{}", usage())),
         },

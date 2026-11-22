@@ -34,6 +34,24 @@ pub struct Scaling {
     pub unit: String,
 }
 
+/// Where a record's reconstructed fields came from -- in effect, the confidence of the join.
+///
+/// GM's PDF wraps a long description across several output lines and vertically offsets the ID
+/// column from the description column, so a fragment can land on a *different* row's text line once
+/// the table is flattened (see `docs/extraction-limits.md`). The parser fills a row's empty cells
+/// only from the continuation lines that follow its own ID line, and records how it got the
+/// description so a caller can treat the low-confidence joins with suspicion or revisit the PDF.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DescriptionSource {
+    /// The description was printed on the row's own ID line (highest confidence).
+    Primary,
+    /// The ID line carried no description; this one was adopted from a following continuation line
+    /// (lower confidence -- the fragment could instead belong to a stacked second definition).
+    Reconstructed,
+    /// No description was found for the row, on its ID line or in any continuation.
+    Missing,
+}
+
 /// One Mode $06 monitor/test-ID definition read from a GM document.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mode06Record {
@@ -45,6 +63,8 @@ pub struct Mode06Record {
     pub uasid: Option<u8>,
     /// The test description GM printed (best effort; empty when the cell wrapped away).
     pub description: String,
+    /// How [`Self::description`] was obtained -- its join confidence.
+    pub description_source: DescriptionSource,
     /// The raw range cell, e.g. `"0.0000 to 7.9900 Volts"` (empty when none was on the row).
     pub unit_range: String,
     /// The raw resolution cell, e.g. `"0.122 mV / bit"` (empty when none was on the row).
@@ -55,6 +75,10 @@ pub struct Mode06Record {
     pub monitor: Option<String>,
     /// 1-based line number of the row within the parsed text, for citation back to the source.
     pub line: usize,
+    /// The raw continuation lines that followed this row's ID line before the next row, verbatim
+    /// and in document order. Kept losslessly: they may be wrapped description fragments, stacked
+    /// second definitions, or range/resolution cells that wrapped off the ID line.
+    pub continuations: Vec<String>,
 }
 
 impl Mode06Record {
@@ -86,6 +110,12 @@ impl Mode06Record {
     #[must_use]
     pub fn scaling(&self) -> Option<Scaling> {
         parse_scaling(&self.resolution)
+    }
+
+    /// Whether the description was reconstructed from a continuation line (a low-confidence join).
+    #[must_use]
+    pub fn is_reconstructed(&self) -> bool {
+        self.description_source == DescriptionSource::Reconstructed
     }
 }
 

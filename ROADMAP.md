@@ -39,6 +39,11 @@ in `primarysource`, so the UASID is kept as a raw byte rather than expanded to a
 | `[ok]` | `model::Mode06Record::scaling` keeps a unit that contains a slash (mV/s) | `gm:mode6-can` resolution cells | `tests/model.rs::a_unit_with_a_slash_survives_the_scaling_parse` |
 | `[ok]` | `model::Mode06Record::uasid_hex` renders a blank UASID as `None` | GM CAN mode $06 data | `tests/model.rs::a_blank_uasid_renders_as_none` |
 | `[ok]` | `model::Mode06Record::value_range` returns `None` for a cell too wrapped to split | GM CAN mode $06 data | `tests/model.rs::a_wrapped_cell_returns_none_not_a_guess` |
+| `[ok]` | every continuation line after a row is kept verbatim on `Mode06Record::continuations` (lossless) | GM CAN mode $06 data layout | `tests/parser.rs::a_primary_description_is_kept_and_the_second_definition_is_preserved_raw` |
+| `[ok]` | a row whose ID line has no description adopts one from its own continuation, marked `Reconstructed` | GM CAN mode $06 data lines 20-21 | `tests/parser.rs::a_bare_id_row_adopts_its_continuation_as_a_reconstructed_description` |
+| `[ok]` | a wrapped range/resolution is filled from a continuation without altering the description | GM CAN mode $06 data lines 36-37 | `tests/parser.rs::a_wrapped_range_is_filled_from_a_continuation_without_touching_the_description` |
+| `[ok]` | a row with no description on its ID line or any continuation is marked `Missing`, not guessed | GM CAN mode $06 data | `tests/parser.rs::a_row_with_no_description_anywhere_is_marked_missing` |
+| `[ok]` | `parser::reconstructed` lists the low-confidence (reconstructed) rows for review | docs/extraction-limits.md | `tests/parser.rs::reconstructed_lists_only_the_low_confidence_rows` |
 
 ## OBD groups and the embedded sample
 
@@ -60,7 +65,7 @@ in `primarysource`, so the UASID is kept as a raw byte rather than expanded to a
 
 | Status | Obligation | Anchor | Test |
 |---|---|---|---|
-| `[open]` | Reconstruct wrapped multi-line descriptions and the second definition stacked in a row | GM CAN mode $06 data | none |
+| `[open]` | Stitch a description fragment stranded on a neighbouring row's ID line (cross-row): the flattened text offsets the ID and description columns, so this cannot be resolved without the source PDF. Blocked on a page/PDF back-reference from `primarysource` (see `docs/extraction-limits.md`). | GM CAN mode $06 data lines 36-38 | none |
 | `[open]` | Parse the FOOTNOTES section bodies (model-year / vehicle applicability per marker 1..20) | `gm:mode6-can§footnotes` | none |
 | `[open]` | Parse the legacy `GM Class2 mode $06 data` document (different layout) | GM Class2 mode $06 data | none |
 | `[open]` | Expand each UASID to its ISO 15031-5 unit-and-scaling definition | ISO 15031-5 (not loaded in primarysource) | none |

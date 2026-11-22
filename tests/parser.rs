@@ -1,8 +1,9 @@
 //! The parser: leading-ID extraction, footnote markers, cell splitting, grouping and lookup.
 
 use mode06kit::catalog::sample_records;
+use mode06kit::model::DescriptionSource;
 use mode06kit::parser::{
-    group_by_obdmid, lookup, parse_all, parse_document, parse_records, parse_section,
+    group_by_obdmid, lookup, parse_all, parse_document, parse_records, parse_section, reconstructed,
 };
 
 /// A multi-monitor excerpt of GM's CAN Mode $06 document: two Oxygen Sensor sections, a page break
@@ -183,4 +184,72 @@ fn records_before_the_first_heading_are_a_monitorless_section() {
     assert_eq!(sections.len(), 1);
     assert_eq!(sections[0].monitor, None);
     assert_eq!(sections[0].records.len(), 1);
+}
+
+#[test]
+fn a_bare_id_row_adopts_its_continuation_as_a_reconstructed_description() {
+    // GM line 20-21: "01 03 0A" alone, then the definition wrapped onto the next line.
+    let text = "01        03       0A\n\
+                             Rich to Lean Sensor Switch Time                    0 to 65535 ms           1 ms / bit";
+    let records = parse_records(text, None);
+    assert_eq!(records.len(), 1);
+    let row = &records[0];
+    assert_eq!(row.description, "Rich to Lean Sensor Switch Time");
+    assert_eq!(row.description_source, DescriptionSource::Reconstructed);
+    assert_eq!(row.unit_range, "0 to 65535 ms");
+    assert_eq!(row.resolution, "1 ms / bit");
+    assert_eq!(row.continuations.len(), 1);
+}
+
+#[test]
+fn a_primary_description_is_kept_and_the_second_definition_is_preserved_raw() {
+    // GM line 16-17: 01-01 prints two stacked definitions; the first is primary, the second is a
+    // continuation kept verbatim (not fabricated into the description).
+    let text = "01   01   0A   Rich to Lean Sensor Threshold Voltage   0.0000 to 7.9900 Volts   0.122 mV / bit\n\
+                          Lean to Rich Sensor Threshold Voltage   0.0000 to 7.9900 Volts   0.122 mV / bit";
+    let records = parse_records(text, None);
+    assert_eq!(records.len(), 1);
+    let row = &records[0];
+    assert_eq!(row.description, "Rich to Lean Sensor Threshold Voltage");
+    assert_eq!(row.description_source, DescriptionSource::Primary);
+    assert_eq!(row.continuations.len(), 1);
+    assert!(row.continuations[0].contains("Lean to Rich Sensor Threshold Voltage"));
+}
+
+#[test]
+fn a_wrapped_range_is_filled_from_a_continuation_without_touching_the_description() {
+    // GM line 36-37: the range wrapped off the ID line onto the next line; the description is the
+    // ID line's own (still truncated, honestly, not stitched across rows).
+    let text = "01   80   16   Particulate Matter Sensor Electrode Current value during   0.01 uAmps / bit\n\
+                                                                        0 to 655.35 uAmps";
+    let records = parse_records(text, None);
+    assert_eq!(records.len(), 1);
+    let row = &records[0];
+    assert_eq!(
+        row.description,
+        "Particulate Matter Sensor Electrode Current value during"
+    );
+    assert_eq!(row.description_source, DescriptionSource::Primary);
+    assert_eq!(row.unit_range, "0 to 655.35 uAmps");
+    assert_eq!(row.resolution, "0.01 uAmps / bit");
+}
+
+#[test]
+fn a_row_with_no_description_anywhere_is_marked_missing() {
+    let records = parse_records("01   85   10", None);
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].description, "");
+    assert_eq!(records[0].description_source, DescriptionSource::Missing);
+}
+
+#[test]
+fn reconstructed_lists_only_the_low_confidence_rows() {
+    let text = "01   04   0A   Lean to Rich Sensor Switch Time   0 to 65535 ms   1 ms / bit\n\
+                01   03   0A\n\
+                             Rich to Lean Sensor Switch Time   0 to 65535 ms   1 ms / bit";
+    let records = parse_records(text, None);
+    assert_eq!(records.len(), 2);
+    let low = reconstructed(&records);
+    assert_eq!(low.len(), 1);
+    assert_eq!(low[0].tid, 0x03);
 }

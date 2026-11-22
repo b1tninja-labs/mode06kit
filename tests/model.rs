@@ -1,6 +1,6 @@
 //! The record model: hex notation and the range/scaling parsers, including GM's en-dash minus.
 
-use mode06kit::model::Mode06Record;
+use mode06kit::model::{DescriptionSource, Mode06Record};
 
 fn sample() -> Mode06Record {
     Mode06Record {
@@ -8,11 +8,13 @@ fn sample() -> Mode06Record {
         tid: 0x04,
         uasid: Some(0x0A),
         description: "Lean to Rich Sensor Switch Time".to_string(),
+        description_source: DescriptionSource::Primary,
         unit_range: "0 to 65535 ms".to_string(),
         resolution: "1 ms / bit".to_string(),
         footnote: None,
         monitor: Some("Oxygen Sensor Monitor Bank 1 Sensor 1".to_string()),
         line: 5,
+        continuations: Vec::new(),
     }
 }
 

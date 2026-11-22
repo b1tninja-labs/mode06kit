@@ -43,7 +43,11 @@ The embedded sample is one representative monitor section of the CAN document, c
 provenance header (`src/data/`), so the tools work out of the box; point `--source` at a full
 extraction for the whole file, which `parser::parse_document` splits into its monitor sections
 (`Oxygen Sensor Monitor Bank 1 Sensor 3`, `EGR Monitor Bank 1`, `Catalyst Monitor Bank 1`, …),
-tagging each record with the monitor it falls under. The reliable core is the three leading
+tagging each record with the monitor it falls under. Each record also keeps the raw continuation
+lines that follow it (`continuations`); a row whose description wrapped onto a later line adopts it
+as a best-effort, confidence-tracked join (`description_source`), never stitching text across rows
+(`mode06kit review` lists the low-confidence joins; [`docs/extraction-limits.md`](docs/extraction-limits.md)
+explains the limit). The reliable core is the three leading
 identifiers plus the footnote
 marker; GM's heavily wrapped descriptions and the ISO 15031-5 UASID → unit expansion are tracked as
 not-built rows in [`ROADMAP.md`](ROADMAP.md). Sources and the ISO status are in

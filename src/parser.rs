@@ -11,7 +11,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::model::{Mode06Record, parse_range, parse_scaling};
+use crate::model::{DescriptionSource, Mode06Record, parse_range, parse_scaling};
 
 /// A parsed data row before it is wrapped in a [`Mode06Record`].
 struct RawRow {
@@ -70,6 +70,16 @@ fn is_boilerplate(line: &str) -> bool {
         if trimmed.starts_with(marker) {
             return true;
         }
+    }
+    // The column-header block GM reprints at every page break. Its first token is one of these
+    // labels; a data row leads with hex and a monitor heading never leads with the bare word
+    // "Monitor", so none of these collides with real content.
+    let first_token = trimmed.split_whitespace().next().unwrap_or("");
+    if matches!(
+        first_token,
+        "OBD" | "(OBDMID)" | "(TID)" | "(UASID)" | "Monitor"
+    ) {
+        return true;
     }
     let collapsed = trimmed.trim_end();
     collapsed.starts_with("GMLAN rev")
@@ -130,26 +140,92 @@ fn record(row: &RawRow, monitor: Option<&str>, line: usize) -> Mode06Record {
         tid: row.tid,
         uasid: Some(row.uasid),
         description,
+        description_source: DescriptionSource::Primary,
         unit_range,
         resolution,
         footnote: row.footnote,
         monitor: monitor.map(str::to_string),
         line,
+        continuations: Vec::new(),
+    }
+}
+
+/// The non-empty form of a string, for `find_map` over continuation cells.
+fn non_empty(cell: String) -> Option<String> {
+    if cell.is_empty() { None } else { Some(cell) }
+}
+
+/// Best-effort fill a record's empty cells from its own continuation lines, recording how the
+/// description was obtained.
+///
+/// Only the record's own continuation lines are consulted -- never text from a neighbouring row's
+/// ID line -- so a join never invents a description out of another row. A description adopted this
+/// way is marked [`DescriptionSource::Reconstructed`] (a low-confidence join) because the fragment
+/// could instead be a stacked second definition; an empty range or resolution is filled from the
+/// first continuation that carries one.
+fn reconstruct(rec: &mut Mode06Record) {
+    if rec.description.is_empty() {
+        if let Some(description) = rec
+            .continuations
+            .iter()
+            .find_map(|cont| non_empty(split_rest(cont).0))
+        {
+            rec.description = description;
+            rec.description_source = DescriptionSource::Reconstructed;
+        } else {
+            rec.description_source = DescriptionSource::Missing;
+        }
+    } else {
+        rec.description_source = DescriptionSource::Primary;
+    }
+    if rec.unit_range.is_empty() {
+        if let Some(range) = rec
+            .continuations
+            .iter()
+            .find_map(|cont| non_empty(split_rest(cont).1))
+        {
+            rec.unit_range = range;
+        }
+    }
+    if rec.resolution.is_empty() {
+        if let Some(resolution) = rec
+            .continuations
+            .iter()
+            .find_map(|cont| non_empty(split_rest(cont).2))
+        {
+            rec.resolution = resolution;
+        }
+    }
+}
+
+/// Run [`reconstruct`] over a section's records in place.
+fn reconstruct_all(records: &mut [Mode06Record]) {
+    for rec in records {
+        reconstruct(rec);
     }
 }
 
 /// Parse every data row in `text` into records, all tagged with `monitor`.
+///
+/// A line that is neither a data row nor a monitor heading is attached to the preceding record as a
+/// raw continuation, and each record's empty cells are then filled best-effort from its own
+/// continuations.
 #[must_use]
 pub fn parse_records(text: &str, monitor: Option<&str>) -> Vec<Mode06Record> {
-    let mut records = Vec::new();
+    let mut records: Vec<Mode06Record> = Vec::new();
     for (index, line) in text.lines().enumerate() {
-        if is_boilerplate(line) {
+        if line.trim().is_empty() || is_boilerplate(line) {
             continue;
         }
         if let Some(row) = parse_row(line) {
             records.push(record(&row, monitor, index + 1));
+        } else if monitor_heading(line).is_none() {
+            if let Some(last) = records.last_mut() {
+                last.continuations.push(line.trim().to_string());
+            }
         }
     }
+    reconstruct_all(&mut records);
     records
 }
 
@@ -160,7 +236,7 @@ pub fn parse_records(text: &str, monitor: Option<&str>) -> Vec<Mode06Record> {
 #[must_use]
 pub fn parse_section(text: &str) -> Vec<Mode06Record> {
     let mut monitor: Option<String> = None;
-    let mut records = Vec::new();
+    let mut records: Vec<Mode06Record> = Vec::new();
     for (index, line) in text.lines().enumerate() {
         if line.trim().is_empty() || is_boilerplate(line) {
             continue;
@@ -170,10 +246,13 @@ pub fn parse_section(text: &str) -> Vec<Mode06Record> {
             None => {
                 if monitor.is_none() {
                     monitor = Some(line.trim().to_string());
+                } else if let Some(last) = records.last_mut() {
+                    last.continuations.push(line.trim().to_string());
                 }
             }
         }
     }
+    reconstruct_all(&mut records);
     records
 }
 
@@ -232,6 +311,7 @@ pub fn parse_document(text: &str) -> Vec<MonitorSection> {
             started = true;
         } else if let Some(name) = monitor_heading(line) {
             if started {
+                reconstruct_all(&mut records);
                 sections.push(MonitorSection {
                     monitor: monitor.take(),
                     records: std::mem::take(&mut records),
@@ -239,9 +319,12 @@ pub fn parse_document(text: &str) -> Vec<MonitorSection> {
             }
             monitor = Some(name);
             started = true;
+        } else if let Some(last) = records.last_mut() {
+            last.continuations.push(line.trim().to_string());
         }
     }
     if started {
+        reconstruct_all(&mut records);
         sections.push(MonitorSection { monitor, records });
     }
     sections
@@ -275,5 +358,18 @@ pub fn lookup(records: &[Mode06Record], obdmid: u8, tid: Option<u8>) -> Vec<&Mod
     records
         .iter()
         .filter(|record| record.obdmid == obdmid && tid.is_none_or(|wanted| record.tid == wanted))
+        .collect()
+}
+
+/// Return the records whose description was reconstructed from a continuation line.
+///
+/// These are the low-confidence joins: the row's ID line carried no description, so one was adopted
+/// from a following line that might instead belong to a stacked second definition. They are the
+/// rows worth revisiting against the source PDF (see `docs/extraction-limits.md`).
+#[must_use]
+pub fn reconstructed(records: &[Mode06Record]) -> Vec<&Mode06Record> {
+    records
+        .iter()
+        .filter(|record| record.is_reconstructed())
         .collect()
 }
